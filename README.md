@@ -1,58 +1,69 @@
 # Identity Guard
 
-A privacy-first universal Expo app starter for Android, iOS, and web.
+A privacy-first Expo app for Android, iOS, and web with a small Node API for live identity-exposure checks.
 
-## Scope
+## What is live now
 
-This MVP is intentionally designed for self-auditing:
-- user-provided identity information
-- authorized platform monitoring
-- exposure findings
-- remediation workflows
+The dashboard no longer displays a hard-coded score or fake findings. The API can use:
+- Brave Search API for public web results matching identifiers you supply
+- Have I Been Pwned API for breach exposure tied to an email you are authorized to audit
+- evidence URLs, timestamps, and a score derived from returned findings
 
-It does **not** perform facial recognition of strangers, scrape arbitrary profiles, infer private social graphs, or collect vulnerabilities about unrelated people.
+The app does not perform facial identification of strangers, bypass access controls, infer private social graphs, or collect vulnerabilities about unrelated people.
 
 ## Run locally
 
+### 1. Backend
+
 ```bash
+cd server
 npm install
-npx expo start
+cp .env.example .env
 ```
 
-Web:
+Edit `server/.env` and add at least one provider key:
+
+```text
+BRAVE_SEARCH_API_KEY=your_key_here
+HIBP_API_KEY=your_key_here
+```
+
+Then:
+
 ```bash
+npm run dev
+```
+
+The API starts on `http://localhost:8787`. Check `http://localhost:8787/health` to see which providers are configured.
+
+### 2. Expo client
+
+From the repository root:
+
+```bash
+npm install
+cp .env.example .env
 npm run web
 ```
 
-Android/iOS:
-```bash
-npm run android
-npm run ios
-```
+The default client API URL is `http://localhost:8787`. For an Android emulator, set `EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8787`. For a physical phone, use your computer's LAN IP and ensure the firewall permits the port.
 
-## Production architecture
+## Important limitations
 
-Recommended next layer:
+- Search results are candidates, not proof that a page belongs to the user; verify evidence before acting.
+- The optional reference photo currently remains local and is not sent to the scan API.
+- Selected-platform persistence, authentication, scheduled scans, and PostgreSQL storage are still to be implemented.
+- Never commit `.env` files or provider secrets. `.env.example` files contain names/placeholders only.
+
+## Recommended production architecture
+
 - Expo Router universal client
-- API routes/server functions
-- PostgreSQL + row-level security
-- OAuth/official platform APIs
-- encrypted object storage for any user-uploaded photo
-- queue/worker for scans
-- immutable finding evidence with timestamps
-- deletion/retention controls
-- audit logs
+- authenticated API
+- PostgreSQL with row-level security
+- official OAuth/platform APIs where supported
+- encrypted object storage
+- background scan queue
+- evidence retention/deletion controls
+- rate limiting and audit logs
 
-## Deployment
-
-Expo's current documentation recommends EAS Hosting for Expo web apps and EAS Build for Android/iOS binaries.
-
-```bash
-npm install -g eas-cli
-eas login
-npx expo export --platform web
-eas deploy
-eas build --platform all
-```
-
-Before production, add authentication, consent/authorization checks, rate limits, encryption, secret management, privacy policy, and platform-specific API compliance.
+Before production, add authentication, consent/authorization checks, secret management, abuse prevention, a privacy policy, and platform-specific API compliance.
