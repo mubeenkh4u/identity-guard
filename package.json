@@ -1,6 +1,6 @@
 {
   "name": "identity-guard",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "main": "expo-router/entry",
   "engines": {
@@ -14,7 +14,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build": "expo export --platform web --output-dir dist",
-    "build:web": "npm run build"
+    "build:web": "npm run build",
+    "package:hostinger": "npm run build && node scripts/prepare-hostinger.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
