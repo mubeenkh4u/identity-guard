@@ -1,8 +1,15 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DIST_DIR = path.resolve(__dirname, "../../dist");
+
+app.disable("x-powered-by");
 app.use(cors());
 app.use(express.json({ limit: "256kb" }));
 
@@ -31,9 +38,7 @@ async function braveSearch(query, platforms = []) {
     const url = new URL("https://api.search.brave.com/res/v1/web/search");
     url.searchParams.set("q", q);
     url.searchParams.set("count", "10");
-    const response = await fetch(url, {
-      headers: { Accept: "application/json", "X-Subscription-Token": BRAVE_KEY },
-    });
+    const response = await fetch(url, { headers: { Accept: "application/json", "X-Subscription-Token": BRAVE_KEY } });
     if (!response.ok) throw new Error(`Brave Search returned HTTP ${response.status}`);
     const data = await response.json();
     for (const item of data.web?.results || []) {
@@ -55,9 +60,7 @@ async function braveSearch(query, platforms = []) {
 async function hibpBreaches(email) {
   if (!HIBP_KEY || !email) return [];
   const endpoint = `https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`;
-  const response = await fetch(endpoint, {
-    headers: { "hibp-api-key": HIBP_KEY, "user-agent": "Identity-Guard/0.1" },
-  });
+  const response = await fetch(endpoint, { headers: { "hibp-api-key": HIBP_KEY, "user-agent": "Identity-Guard/0.2" } });
   if (response.status === 404) return [];
   if (!response.ok) throw new Error(`HIBP returned HTTP ${response.status}`);
   const breaches = await response.json();
@@ -65,7 +68,7 @@ async function hibpBreaches(email) {
     id: `breach:${b.Name}`,
     type: "breach",
     title: `${b.Title || b.Name} breach exposure`,
-    detail: `Your verified email may appear in this breach. Exposed data classes: ${(b.DataClasses || []).join(", ") || "not specified"}. Change reused passwords and enable MFA/passkeys.`,
+    detail: `Your authorized email may appear in this breach. Exposed data classes: ${(b.DataClasses || []).join(", ") || "not specified"}. Change reused passwords and enable MFA/passkeys.`,
     severity: (b.DataClasses || []).some(x => /password/i.test(x)) ? "High" : "Medium",
     source: "Have I Been Pwned",
     url: b.Domain ? `https://${b.Domain}` : undefined,
@@ -73,28 +76,47 @@ async function hibpBreaches(email) {
   }));
 }
 
-app.get("/health", (_req, res) => res.json({ ok: true, providers: { brave: Boolean(BRAVE_KEY), hibp: Boolean(HIBP_KEY) } }));
+function health(_req, res) {
+  res.json({ ok: true, providers: { brave: Boolean(BRAVE_KEY), hibp: Boolean(HIBP_KEY) } });
+}
 
-app.post("/scan", async (req, res) => {
+async function scan(req, res) {
   const name = String(req.body?.name || "").trim();
   const email = String(req.body?.email || "").trim();
   const username = String(req.body?.username || "").trim();
   const platforms = Array.isArray(req.body?.platforms) ? req.body.platforms.map(String) : [];
   if (!name && !email && !username) return res.status(400).json({ error: "Provide at least one identity identifier." });
-  if (!BRAVE_KEY && !HIBP_KEY) return res.status(503).json({ error: "No scan provider is configured. Add BRAVE_SEARCH_API_KEY and/or HIBP_API_KEY to server/.env." });
+  if (!BRAVE_KEY && !HIBP_KEY) return res.status(503).json({ error: "No scan provider is configured. Add BRAVE_SEARCH_API_KEY and/or HIBP_API_KEY as server environment variables." });
 
   try {
     const terms = [name && `\"${name}\"`, username && `\"${username}\"`, email && `\"${email}\"`].filter(Boolean).join(" OR ");
-    const [web, breaches] = await Promise.all([
-      terms ? braveSearch(terms, platforms) : [],
-      hibpBreaches(email),
-    ]);
+    const [web, breaches] = await Promise.all([terms ? braveSearch(terms, platforms) : [], hibpBreaches(email)]);
     const findings = [...breaches, ...web];
     res.json({ score: scoreFindings(findings), findings, providers: { brave: Boolean(BRAVE_KEY), hibp: Boolean(HIBP_KEY) }, scannedAt: new Date().toISOString() });
   } catch (error) {
     console.error(error);
     res.status(502).json({ error: error instanceof Error ? error.message : "Scan provider failed." });
   }
+}
+
+app.get("/api/health", health);
+app.post("/api/scan", scan);
+// Legacy development endpoints remain temporarily available.
+app.get("/health", health);
+app.post("/scan", scan);
+
+app.use(express.static(DIST_DIR, { index: "index.html" }));
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/")) return next();
+  res.sendFile(path.join(DIST_DIR, "index.html"), error => {
+    if (error) next(error);
+  });
 });
 
-app.listen(PORT, () => console.log(`Identity Guard API listening on http://localhost:${PORT}`));
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  if (res.headersSent) return;
+  res.status(500).json({ error: "Server error." });
+});
+
+app.listen(PORT, "0.0.0.0", () => console.log(`Identity Guard listening on port ${PORT}`));
