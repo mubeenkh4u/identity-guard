@@ -28,7 +28,8 @@ export type ScanResponse = {
   scannedAt: string;
 };
 
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8787").replace(/\/$/, "");
+const configuredBase = process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
+const API_BASE_URL = configuredBase || (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:8787/api");
 
 export async function scanIdentity(input: ScanRequest): Promise<ScanResponse> {
   const response = await fetch(`${API_BASE_URL}/scan`, {
