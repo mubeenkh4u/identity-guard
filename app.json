@@ -2,14 +2,14 @@
   "expo": {
     "name": "Identity Guard",
     "slug": "identity-guard",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "scheme": "identityguard",
     "userInterfaceStyle": "automatic",
     "plugins": ["expo-router", "expo-image-picker"],
     "web": {
       "bundler": "metro",
-      "output": "server"
+      "output": "static"
     },
     "experiments": {
       "typedRoutes": true
